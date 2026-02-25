@@ -3,13 +3,18 @@
     "description": "Websocket client",
     "type": "library",
     "require-dev": {
-        "phpunit/phpunit": "9.5.x-dev",
-        "cboden/ratchet": "dev-master"
+      "phpunit/phpunit": "9.6",
+      "cboden/ratchet": "v0.5.x-dev"
     },
     "license": "MIT",
     "autoload": {
         "psr-4": {
             "Paragi\\PhpWebsocket\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Paragi\\PhpWebsocket\\tests\\": "tests/"
         }
     },
     "minimum-stability": "dev"

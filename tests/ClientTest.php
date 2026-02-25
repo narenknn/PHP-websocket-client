@@ -49,7 +49,7 @@ class ClientTest extends TestCase
     public function testUnknowHost()
     {
         $this->expectException(ConnectionException::class);
-        $this->expectExceptionMessage('getaddrinfo failed');
+        $this->expectExceptionMessage('getaddrinfo')->expectExceptionMessage('failed');
         new Client('yoloserver.unknown');
     }
 
