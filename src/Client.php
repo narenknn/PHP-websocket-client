@@ -45,6 +45,8 @@ class Client implements ClientInterface
 {
 
     protected $connection;
+    protected $active = false;
+    protected $config;
 
     /* ============================================================================*\
       Open websocket connection
@@ -83,7 +85,7 @@ class Client implements ClientInterface
       "Sec-WebSocket-Accept"
       \*============================================================================ */
 
-    public function __construct(string $host = '', int $port = 80, $headers = '', &$error_string = '', int $timeout = 10, bool $ssl = false, bool $persistant = false, string $path = '/', $context = null)
+    public function __construct(string $host = '', int $port = 80, $headers = '', &$error_string = '', int $timeout = 10, bool $ssl = false, bool $persistant = false, string $path = '/', $context = null, bool $blocking = true)
     {
 
         // Generate a key (to convince server that the update is not random)
@@ -148,7 +150,20 @@ class Client implements ClientInterface
             // C5AB0DC85B11" and then base64-encoded. one can verify if one feels the need...
         }
 
+        /* */
         $this->connection = $sp;
+        $this->active = true;
+
+        // Set blocking
+        stream_set_blocking($sp, $blocking);
+        $this->config = [
+            'blocking' => $blocking,
+            'nb' => [
+                'state' => 0,
+                'data' => '',
+                'dlen' => 0,
+            ]
+        ];
     }
 
     /* ============================================================================*\
@@ -223,8 +238,12 @@ class Client implements ClientInterface
 
     public function read(&$error_string = NULL)
     {
+        /* non-blocking reads */
+        if (false == $this->config['blocking']) {
+            return $this->nbread($error_string);
+        }
+        /* blocking reads */
         $data = "";
-
         do {
             // Read header
             $header = fread($this->connection, 2);
@@ -299,6 +318,130 @@ class Client implements ClientInterface
             } else
                 continue;
         } while (!$final);
+
+        return $data;
+    }
+
+    /* non-blocking read from socket goes through states
+       0 : header 2 bytes not yet received
+       1 : payload len not received
+       2 : mask not received
+     */
+    private function nbfread(int $len = 1, &$data)
+    {
+        $data = '';
+        if ($this->config['nb']['dlen'] < $len) {
+            $data = fread($this->connection, $this->config['nb']['dlen'] - $len);
+            if ($data) {
+                $this->config['nb']['data'] .= $data;
+                $this->config['nb']['dlen'] += $data;
+            }
+        }
+        if ($this->config['nb']['dlen'] < $len)
+            return false;
+        /* success, obtained required data */
+        $data = $this->config['nb']['data'];
+        $this->config['nb']['data'] = '';
+        $this->config['nb']['dlen'] = 0;
+        return true;
+    }
+    public function nbread(&$error_string = NULL)
+    {
+        $data = '';
+        if (!$this->active) {
+            $error_string = "Attempt to read a closed stream.";
+            throw new ConnectionException($error_string);
+        }
+
+        do {
+            /* init */
+            [$header, $mask, $frame_data] = ['', '', ''];
+            $continue = false;
+
+            if (0 == $this->config['nb']['state']) {
+                $rstat = $this->nbfread(2, $header);
+                if (!$rstat) return $data;
+                /* move to next state */
+                $this->config['nb']['opcode'] = ord($header[0]) & 0x0F;
+                $this->config['nb']['final'] = ord($header[0]) & 0x80;
+                $this->config['nb']['masked'] = ord($header[1]) & 0x80;
+                $this->config['nb']['$payload_len'] = ord($header[1]) & 0x7F;
+                $this->config['nb']['mask'] = '';
+                $this->config['nb']['state'] = 1;
+            }
+
+            if (1 == $this->config['nb']['state']) {
+                /* Get payload length extensions */
+                $ext_len = 0;
+                if ($this->config['nb']['payload_len'] >= 0x7E) {
+                    $ext_len = 2;
+                    if ($this->config['nb']['payload_len'] == 0x7F)
+                        $ext_len = 8;
+                    $rstat = $this->nbfread($ext_len, $header);
+                    if (!$rstat) {
+                        return $data;
+                    }
+
+                    /* Set extented paylod length */
+                    $this->config['nb']['payload_len'] = 0;
+                    for ($i = 0; $i < $ext_len; $i++)
+                        $this->config['nb']['payload_len'] += ord($header[$i]) << ($ext_len - $i - 1) * 8;
+                }
+                $this->config['nb']['state'] = $this->config['nb']['masked'] ? 2 : 3;
+            }
+
+            /* Get Mask key */
+            if (2 == $this->config['nb']['state']) {
+                $rstat = $this->nbfread(4, $mask);
+                if (!$rstat) {
+                    return $data;
+                }
+                $this->config['nb']['mask'] = $mask;
+                $this->config['nb']['state'] = 3;
+            }
+
+            /* Get payload */
+            if (3 == $this->config['nb']['state']) {
+                $rstat = $this->nbfread($this->config['nb']['payload_len'], $frame_data);
+                if (!$rstat) {
+                    return $data;
+                }
+                $this->config['nb']['state'] = 4;
+            }
+
+            /* full data is received, proceed to send/respond */
+            if (4 == $this->config['nb']['state']) {
+                if (9 == $this->config['nb']['opcode']) {
+                    /* Handle ping requests (sort of) send pong and continue to read */
+                    /* Assamble header: FINal 0x80 | Opcode 0x0A + Mask on 0x80 with zero payload */
+                    fwrite($this->connection, chr(0x8A) . chr(0x80) . pack("N", rand(1, 0x7FFFFFFF)));
+                    /* continue with next read */
+                    $continue = true;
+                } elseif (8 == $this->config['nb']['opcode']) { /* close connection */
+                    $this->active = false;
+                    $continue = false;
+                    fclose($this->connection);
+                } elseif ($opcode < 3) {
+                    /* 0 = continuation frame, 1 = text frame, 2 = binary frame */
+                    /* Unmask data */
+                    $data_len = strlen($frame_data);
+                    if ($this->config['nb']['masked'])
+                        for ($i = 0; $i < $data_len; $i++)
+                            $data .= $frame_data[$i] ^ $mask[$i % 4];
+                    else
+                        $data .= $frame_data;
+                    $continue = $this->config['nb']['final'] ? false : true;
+                } else {
+                    /* continue with next read */
+                    $continue = true;
+                }
+                /* from here, we start from first */
+                $this->config['nb']['state'] = 0;
+                $this->config['nb']['data'] = '';
+                $this->config['nb']['dlen'] = 0;
+            }
+
+        } while ($continue);
 
         return $data;
     }
