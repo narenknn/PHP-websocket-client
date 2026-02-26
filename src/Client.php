@@ -331,10 +331,11 @@ class Client implements ClientInterface
     {
         $data = '';
         if ($this->config['nb']['dlen'] < $len) {
-            $data = fread($this->connection, $this->config['nb']['dlen'] - $len);
+            $toRead = $len - $this->config['nb']['dlen'];
+            $data = fread($this->connection, $toRead);
             if ($data) {
                 $this->config['nb']['data'] .= $data;
-                $this->config['nb']['dlen'] += $data;
+                $this->config['nb']['dlen'] += strlen($data);
             }
         }
         if ($this->config['nb']['dlen'] < $len)
@@ -365,7 +366,7 @@ class Client implements ClientInterface
                 $this->config['nb']['opcode'] = ord($header[0]) & 0x0F;
                 $this->config['nb']['final'] = ord($header[0]) & 0x80;
                 $this->config['nb']['masked'] = ord($header[1]) & 0x80;
-                $this->config['nb']['$payload_len'] = ord($header[1]) & 0x7F;
+                $this->config['nb']['payload_len'] = ord($header[1]) & 0x7F;
                 $this->config['nb']['mask'] = '';
                 $this->config['nb']['state'] = 1;
             }
@@ -421,7 +422,7 @@ class Client implements ClientInterface
                     $this->active = false;
                     $continue = false;
                     fclose($this->connection);
-                } elseif ($opcode < 3) {
+                } elseif ($this->config['nb']['opcode'] < 3) {
                     /* 0 = continuation frame, 1 = text frame, 2 = binary frame */
                     /* Unmask data */
                     $data_len = strlen($frame_data);
