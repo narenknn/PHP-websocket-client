@@ -41,8 +41,8 @@ class ControlledStreamWrapper
         }
 
         $remaining = strlen($this->data) - $this->position;
-        $toRead = ($this->chunkSize > 0 && $this->chunkSize < $length) 
-            ? min($this->chunkSize, $remaining) 
+        $toRead = ($this->chunkSize > 0 && $this->chunkSize < $length)
+            ? min($this->chunkSize, $remaining)
             : min($length, $remaining);
 
         $result = substr($this->data, $this->position, $toRead);

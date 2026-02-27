@@ -46,7 +46,14 @@ class Client implements ClientInterface
 
     protected $connection;
     protected $active = false;
-    protected $config;
+    protected $config = [
+        'blocking' => true,
+        'nb' => [
+            'state' => 0,
+            'data' => '',
+            'dlen' => 0,
+        ]
+    ];
 
     /* ============================================================================*\
       Open websocket connection
@@ -329,13 +336,11 @@ class Client implements ClientInterface
      */
     private function nbfread(int $len = 1, &$data)
     {
-        $data = '';
         if ($this->config['nb']['dlen'] < $len) {
-            $toRead = $len - $this->config['nb']['dlen'];
-            $data = fread($this->connection, $toRead);
-            if ($data) {
-                $this->config['nb']['data'] .= $data;
-                $this->config['nb']['dlen'] += strlen($data);
+            $rdat = fread($this->connection, $len - $this->config['nb']['dlen']);
+            if ($rdat) {
+                $this->config['nb']['data'] .= $rdat;
+                $this->config['nb']['dlen'] += strlen($rdat);
             }
         }
         if ($this->config['nb']['dlen'] < $len)
@@ -361,7 +366,7 @@ class Client implements ClientInterface
 
             if (0 == $this->config['nb']['state']) {
                 $rstat = $this->nbfread(2, $header);
-                if (!$rstat) return $data;
+                if (false == $rstat) return $data;
                 /* move to next state */
                 $this->config['nb']['opcode'] = ord($header[0]) & 0x0F;
                 $this->config['nb']['final'] = ord($header[0]) & 0x80;
@@ -379,7 +384,7 @@ class Client implements ClientInterface
                     if ($this->config['nb']['payload_len'] == 0x7F)
                         $ext_len = 8;
                     $rstat = $this->nbfread($ext_len, $header);
-                    if (!$rstat) {
+                    if (false == $rstat) {
                         return $data;
                     }
 
@@ -394,7 +399,7 @@ class Client implements ClientInterface
             /* Get Mask key */
             if (2 == $this->config['nb']['state']) {
                 $rstat = $this->nbfread(4, $mask);
-                if (!$rstat) {
+                if (false == $rstat) {
                     return $data;
                 }
                 $this->config['nb']['mask'] = $mask;
@@ -404,7 +409,7 @@ class Client implements ClientInterface
             /* Get payload */
             if (3 == $this->config['nb']['state']) {
                 $rstat = $this->nbfread($this->config['nb']['payload_len'], $frame_data);
-                if (!$rstat) {
+                if (false == $rstat) {
                     return $data;
                 }
                 $this->config['nb']['state'] = 4;

@@ -26,4 +26,9 @@
             <html outputDirectory="./.coverage" lowUpperBound="50" highLowerBound="90"/>
         </report>
     </coverage>
+
+    <logging>
+        <testdoxText outputFile="php://stdout"/>
+    </logging>
+
 </phpunit>
