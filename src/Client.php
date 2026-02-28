@@ -92,7 +92,7 @@ class Client implements ClientInterface
       "Sec-WebSocket-Accept"
       \*============================================================================ */
 
-    public function __construct(string $host = '', int $port = 80, $headers = '', &$error_string = '', int $timeout = 10, bool $ssl = false, bool $persistant = false, string $path = '/', $context = null, bool $blocking = true)
+    public function __construct(string $host = '', int $port = 80, $headers = [], &$error_string = '', int $timeout = 10, bool $ssl = false, bool $persistant = false, string $path = '/', $context = null, bool $blocking = true)
     {
 
         // Generate a key (to convince server that the update is not random)
@@ -109,9 +109,8 @@ class Client implements ClientInterface
             . "Sec-WebSocket-Version: 13\r\n";
 
         // Add extra headers
-        if (!empty($headers))
-            foreach ($headers as $h)
-                $header .= $h . "\r\n";
+        foreach ($headers as $h)
+            $header .= $h . "\r\n";
 
         // Add end of header marker
         $header .= "\r\n";
@@ -145,12 +144,12 @@ class Client implements ClientInterface
             }
 
             // Read response into an assotiative array of headers. Fails if upgrade failes.
-            $reaponse_header = fread($sp, 1024);
+            $response_header = fread($sp, 1024);
 
             // status code 101 indicates that the WebSocket handshake has completed.
-            if (stripos($reaponse_header, ' 101 ') === false || stripos($reaponse_header, 'Sec-WebSocket-Accept: ') === false) {
+            if (stripos($response_header, ' 101 ') === false || stripos($response_header, 'Sec-WebSocket-Accept: ') === false) {
                 $error_string = "Server did not accept to upgrade connection to websocket."
-                    . $reaponse_header . E_USER_ERROR;
+                    . $response_header . E_USER_ERROR;
                 throw new ConnectionException($error_string);
             }
             // The key we send is returned, concatenate with "258EAFA5-E914-47DA-95CA-

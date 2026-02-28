@@ -29,6 +29,11 @@ class ClientTest extends TestCase
         return self::useLocalhost() ? self::testServerPort : self::ECHO_PORT;
     }
 
+    private function getServerSsl(): bool
+    {
+        return !self::useLocalhost();
+    }
+
     public function testConnectToLocalEchoingServer()
     {
         try {
@@ -53,7 +58,7 @@ class ClientTest extends TestCase
      */
     public function testExample(string $message)
     {
-        $sut = new Client($this->getServerDomain(), $this->getServerPort(), '', $errstr, 3, false);
+        $sut = new Client($this->getServerDomain(), $this->getServerPort(), '', $errstr, 3, $this->getServerSsl());
         $written = $sut->write($message);
         $this->assertNotFalse($written, 'Unable to write to ' . $this->getServerDomain());
         $response = $sut->read($errstr);
@@ -63,7 +68,8 @@ class ClientTest extends TestCase
     public function testUnknowHost()
     {
         $this->expectException(ConnectionException::class);
-        $this->expectExceptionMessage('getaddrinfo')->expectExceptionMessage('failed');
+        $this->expectExceptionMessage('getaddrinfo');
+        $this->expectExceptionMessage('failed');
         new Client('yoloserver.unknown');
     }
 

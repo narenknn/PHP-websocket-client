@@ -9,11 +9,7 @@ trait UseLocalhostOption
     private static function useLocalhost(): bool
     {
         if (self::$useLocalhost === null) {
-            self::$useLocalhost = getenv('USE_LOCALHOST') !== false || getenv('USE_LOCALHOST') === '1';
-            if (!self::$useLocalhost) {
-                $options = getopt('', ['use-localhost']);
-                self::$useLocalhost = isset($options['use-localhost']);
-            }
+            self::$useLocalhost = in_array('--use-localhost', $_SERVER['argv']);
         }
 
         return self::$useLocalhost;
