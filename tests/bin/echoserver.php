@@ -7,6 +7,6 @@
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-$app = new Ratchet\App('127.0.0.1', 9999, '0.0.0.0');
-$app->route('/', new Ratchet\Server\EchoServer(), ['*']);
+$app = new Ratchet\App('127.0.0.1', 9999);
+$app->route('/', new Ratchet\Server\EchoServer, array('*'));
 $app->run();

@@ -58,7 +58,7 @@ class ClientTest extends TestCase
      */
     public function testExample(string $message)
     {
-        $sut = new Client($this->getServerDomain(), $this->getServerPort(), '', $errstr, 3, $this->getServerSsl());
+        $sut = new Client($this->getServerDomain(), $this->getServerPort(), [], $errstr, 3, $this->getServerSsl());
         $written = $sut->write($message);
         $this->assertNotFalse($written, 'Unable to write to ' . $this->getServerDomain());
         $response = $sut->read($errstr);
